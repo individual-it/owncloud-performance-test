@@ -5,22 +5,53 @@ import time
 import multiprocessing 
 
 servers=[
+#          {'name':'git_master',
+#           'url':'http://10.49.32.226/owncloud_git',
+#          'users':[{'login':'test1','password':'test1'},{'login':'test2','password':'test2'},{'login':'test3','password':'test3'},{'login':'test4','password':'test4'}],
+#          'pre-execution-command':'',
+#          },
 
           {'name':'git_master',
            'url':'http://localhost/owncloud-core',
           'users':[{'login':'test1','password':'test1'},{'login':'test2','password':'test2'},{'login':'test3','password':'test3'},{'login':'test4','password':'test4'}],                    
-          'pre-execution-command':'cd /home/artur/www/owncloud-core/;git checkout master'
+          'pre-execution-command':''
 
           },
 
           {'name':'skip_unnecessary_cache_updates',
-           'url':'http://localhost/owncloud-core',
+           'url':'http://localhost/owncloud-fix',
           'users':[{'login':'test1','password':'test1'},{'login':'test2','password':'test2'},{'login':'test3','password':'test3'},{'login':'test4','password':'test4'}],          
-          'pre-execution-command':'cd /home/artur/www/owncloud-core/;git checkout skip_unnecessary_cache_updates'
+          'pre-execution-command':''
           },
 
     ]
 
+def downloadFolderRecursive (oc):
+    directories=oc.list('owncloudtest')
+    for directory in directories:
+        files=oc.list(directory.path)
+
+        for file in files:
+            if file.file_type == 'file':
+                oc.get_file(file.path,'/dev/null')
+                            
+                sys.stdout.write(".")
+                sys.stdout.flush()
+
+def uploadFoderRecursive (oc):
+    for directory, subdirectories, files in os.walk('owncloudtest/'):
+
+        for subdirectory in subdirectories:
+            directoryToCreate=os.path.join(directory, subdirectory)
+            oc.mkdir(directoryToCreate)
+            
+        for file in files:
+            filename = os.path.join(directory, file)
+            oc.put_file(filename,filename)
+            sys.stdout.write(".")
+            sys.stdout.flush()
+                
+    
 if __name__ == '__main__':
  
     results={'small_files_upload':[],
@@ -49,35 +80,15 @@ if __name__ == '__main__':
 
         print "testing upload small files to " + server['url']
         jobs = []
-        jobs_alive=0
 
-        for directory, subdirectories, files in os.walk('owncloudtest/'):
-
-            for subdirectory in subdirectories:
-                for oc in multiOc:
-                    directoryToCreate=os.path.join(directory, subdirectory)
-                    #oc.mkdir(directoryToCreate)
-                    p = multiprocessing.Process(target=oc.mkdir, args=(directoryToCreate,))
-                    p.start()
-                    jobs.append(p)
-
-                for j in jobs:
-                    j.join()
-                 
-            for file in files:
-                filename = os.path.join(directory, file)
-                for oc in multiOc:
-                    p = multiprocessing.Process(target=oc.put_file, args=(filename,filename))
-                    p.start()
-                    jobs.append(p)
-
-
-                sys.stdout.write(".")
-                sys.stdout.flush()
-
-                for j in jobs:
-                    j.join()
-
+        for oc in multiOc:        
+            p = multiprocessing.Process(target=uploadFoderRecursive, args=(oc,))
+            p.start()
+            jobs.append(p)
+            
+        for j in jobs:
+            j.join()  
+        
         end = time.time()
         result = (end - start)
         results['small_files_upload'].append(result)
@@ -91,20 +102,12 @@ if __name__ == '__main__':
         jobs = []
 
         for oc in multiOc:
-            directories=oc.list('owncloudtest')
-            for directory in directories:
-                files=oc.list(directory.path)
+            p = multiprocessing.Process(target=downloadFolderRecursive,args=(oc,))
+            p.start()
+            jobs.append(p)
 
-                for file in files:
-                    if file.file_type == 'file':
-                        p = multiprocessing.Process(target=oc.get_file, args=(file.path,'/dev/null'))
-                        p.start()
-                        jobs.append(p)
-
-                        sys.stdout.write(".")
-                        sys.stdout.flush()
-                    for j in jobs:
-                        j.join()
+        for j in jobs:
+            j.join()
 
         end = time.time()
         result = (end - start)
