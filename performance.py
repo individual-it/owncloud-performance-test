@@ -15,7 +15,6 @@ servers=[
            'url':'http://localhost/owncloud-core',
           'users':[{'login':'test1','password':'test1'},{'login':'test2','password':'test2'},{'login':'test3','password':'test3'},{'login':'test4','password':'test4'}],                    
           'pre-execution-command':''
-
           },
 
           {'name':'skip_unnecessary_cache_updates',
@@ -26,6 +25,8 @@ servers=[
 
     ]
 
+maxRetries=4
+
 def downloadFolderRecursive (oc):
     directories=oc.list('owncloudtest')
     for directory in directories:
@@ -33,8 +34,18 @@ def downloadFolderRecursive (oc):
 
         for file in files:
             if file.file_type == 'file':
-                oc.get_file(file.path,'/dev/null')
-                            
+                fileDownloaded=False
+                retriesLeft=maxRetries
+                while (fileDownloaded == False) and (retriesLeft>0):
+                    try:
+                        fileDownloaded=oc.get_file(file.path,'/dev/null')
+                    except owncloud.HTTPResponseError as e:
+                        print e
+                        time.sleep(0.2)
+                        print "retry download " + file.path
+                        retriesLeft=retriesLeft-1
+                        fileDownloaded=False
+                        pass
                 sys.stdout.write(".")
                 sys.stdout.flush()
 
@@ -42,14 +53,38 @@ def uploadFoderRecursive (oc):
     for directory, subdirectories, files in os.walk('owncloudtest/'):
 
         for subdirectory in subdirectories:
+            folderCreated=False
+            retriesLeft=maxRetries
             directoryToCreate=os.path.join(directory, subdirectory)
-            oc.mkdir(directoryToCreate)
+            while (folderCreated == False) and (retriesLeft>0):
+                try:
+                    folderCreated=oc.mkdir(directoryToCreate)
+                except owncloud.HTTPResponseError as e:
+                    print e
+                    time.sleep(0.2)
+                    print "retry mkdir " + directoryToCreate
+                    retriesLeft=retriesLeft-1
+                    folderCreated=False
+                    pass
+            
+      
             
         for file in files:
+            fileCreated=False
+            retriesLeft=maxRetries
             filename = os.path.join(directory, file)
-            oc.put_file(filename,filename)
-            sys.stdout.write(".")
-            sys.stdout.flush()
+            while (fileCreated == False) and (retriesLeft>0):
+                try:
+                    fileCreated=oc.put_file(filename,filename)
+                except owncloud.HTTPResponseError as e:
+                    print e
+                    time.sleep(0.2)
+                    print "retry put file " + filename
+                    retriesLeft=retriesLeft-1
+                    fileCreated=False
+
+                sys.stdout.write(".")
+                sys.stdout.flush()
                 
     
 if __name__ == '__main__':
@@ -76,7 +111,17 @@ if __name__ == '__main__':
         start = time.time()
 
         for oc in multiOc:
-            oc.mkdir('owncloudtest')
+            folderCreated=False
+            retriesLeft=maxRetries
+            while (folderCreated == False) and (retriesLeft>0):
+                try:
+                    folderCreated=oc.mkdir('owncloudtest')
+                except Exception, e:
+                    print e
+                    time.sleep(0.2)
+                    print "retry mkdir owncloudtest"
+                    retriesLeft=retriesLeft-1
+                    folderCreated=False    
 
         print "testing upload small files to " + server['url']
         jobs = []
